@@ -23,10 +23,10 @@ A window will open showing the rank, name and current price of the top cryptocur
 
 ### Flask dashboard
 
-Install the required libraries if you haven't already:
+Install the required library if you haven't already:
 
 ```bash
-pip install flask requests
+pip install flask
 ```
 
 Start the web server:
@@ -35,4 +35,4 @@ Start the web server:
 python3 coingecko_dashboard.py
 ```
 
-Open `http://localhost:5000` in your browser to see the table of top coins.
+Open `http://localhost:5000` in your browser to see the treemap of top coins.

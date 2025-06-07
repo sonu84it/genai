@@ -1,6 +1,8 @@
 from flask import Flask, render_template_string
 import json
-import requests
+from urllib.request import urlopen
+from urllib.error import URLError
+from urllib.parse import urlencode
 
 app = Flask(__name__)
 
@@ -8,39 +10,49 @@ TEMPLATE = '''
 <!DOCTYPE html>
 <html>
 <head>
-    <title>CoinGecko Top Coins</title>
+    <meta charset="utf-8">
+    <title>Crypto Market Treemap</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
-        table { border-collapse: collapse; width: 60%; margin: auto; }
-        th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
-        th { background-color: #f5f5f5; }
+        body { font-family: Arial, sans-serif; }
+        #treemap { width: 90vw; height: 90vh; margin: auto; }
     </style>
 </head>
 <body>
-    <h2 style="text-align:center;">Top {{ coins|length }} Cryptocurrencies</h2>
-    {% if coins %}
-    <table>
-        <tr>
-            {% for key in keys %}
-            <th>{{ key }}</th>
-            {% endfor %}
-        </tr>
-        {% for coin in coins %}
-        <tr>
-            {% for key in keys %}
-            <td>{{ coin[key]|tojson if coin[key] is mapping or coin[key] is sequence else coin[key] }}</td>
-            {% endfor %}
-        </tr>
-        {% endfor %}
-    </table>
-    {% else %}
-    <p style="text-align:center;">No data available</p>
-    {% endif %}
+    <h2 style="text-align:center;">Top {{ coins|length }} Cryptocurrencies by Market Cap</h2>
+    <div id="treemap"></div>
+    <script>
+        const coins = {{ coins|tojson }};
+        function getColor(pct) {
+            if (pct === null || pct === undefined || isNaN(pct)) return '#d3d3d3';
+            const abs = Math.abs(pct);
+            let tone = 'dark';
+            if (abs < 5) tone = 'light';
+            else if (abs < 10) tone = 'medium';
+            const greens = {light: '#b6f2b6', medium: '#5ec25e', dark: '#006400'};
+            const reds = {light: '#f7bdbd', medium: '#f06d6d', dark: '#8b0000'};
+            return pct >= 0 ? greens[tone] : reds[tone];
+        }
+        const labels = coins.map(c => (c.symbol.toUpperCase() + ' - ' + c.name));
+        const values = coins.map(c => c.market_cap);
+        const colors = coins.map(c => getColor(c.price_change_percentage_24h));
+        const data = [{
+            type: 'treemap',
+            labels: labels,
+            parents: Array(labels.length).fill(''),
+            values: values,
+            textinfo: 'label',
+            marker: {colors: colors}
+        }];
+        Plotly.newPlot('treemap', data, {margin: {t: 0, l: 0, r: 0, b: 0}});
+    </script>
 </body>
 </html>
 '''
 
 
 def fetch_top_coins(limit=10):
+    """Return market data for the top ``limit`` cryptocurrencies."""
     url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {
         "vs_currency": "usd",
@@ -49,22 +61,24 @@ def fetch_top_coins(limit=10):
         "page": 1,
         "sparkline": "false",
     }
-    resp = requests.get(url, params=params, timeout=10)
-    resp.raise_for_status()
-    return resp.json()
+    query = urlencode(params)
+    try:
+        with urlopen(f"{url}?{query}", timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+    except URLError as exc:
+        raise RuntimeError(f"Failed to fetch data: {exc}") from exc
+    return data
 
 
 @app.route("/")
 def index():
     try:
         coins = fetch_top_coins()
-    except requests.RequestException as exc:
+    except Exception as exc:
         coins = []
         print(f"Error fetching data: {exc}")
 
-    keys = list(coins[0].keys()) if coins else []
-
-    return render_template_string(TEMPLATE, coins=coins, keys=keys)
+    return render_template_string(TEMPLATE, coins=coins)
 
 
 if __name__ == "__main__":
