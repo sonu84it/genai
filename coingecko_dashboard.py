@@ -1,4 +1,5 @@
 from flask import Flask, render_template_string
+import json
 import requests
 
 app = Flask(__name__)
@@ -16,16 +17,24 @@ TEMPLATE = '''
 </head>
 <body>
     <h2 style="text-align:center;">Top {{ coins|length }} Cryptocurrencies</h2>
+    {% if coins %}
     <table>
-        <tr><th>Rank</th><th>Name</th><th>Price (USD)</th></tr>
+        <tr>
+            {% for key in keys %}
+            <th>{{ key }}</th>
+            {% endfor %}
+        </tr>
         {% for coin in coins %}
         <tr>
-            <td>{{ coin.market_cap_rank }}</td>
-            <td>{{ coin.name }}</td>
-            <td>${{ "{:,.2f}".format(coin.current_price) }}</td>
+            {% for key in keys %}
+            <td>{{ coin[key]|tojson if coin[key] is mapping or coin[key] is sequence else coin[key] }}</td>
+            {% endfor %}
         </tr>
         {% endfor %}
     </table>
+    {% else %}
+    <p style="text-align:center;">No data available</p>
+    {% endif %}
 </body>
 </html>
 '''
@@ -52,7 +61,10 @@ def index():
     except requests.RequestException as exc:
         coins = []
         print(f"Error fetching data: {exc}")
-    return render_template_string(TEMPLATE, coins=coins)
+
+    keys = list(coins[0].keys()) if coins else []
+
+    return render_template_string(TEMPLATE, coins=coins, keys=keys)
 
 
 if __name__ == "__main__":
